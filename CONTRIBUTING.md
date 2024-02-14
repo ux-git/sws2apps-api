@@ -10,7 +10,7 @@ Please make sure that you have read the [code of conduct](https://github.com/sws
 
 ## Branch Organization
 
-We only use the `main` branch. Feature flags are used for new features and major changes.
+We use the `main` branch for the current version (CPE), but for the new Organized version it's important to use `main-e2e` branch. . Feature flags are used for new features and major changes.
 
 ## Bugs
 
