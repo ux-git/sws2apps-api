@@ -75,7 +75,7 @@ export const getCongregationPersons = (congregationId: string) => {
 export const saveCongregationSettings = (congregation: Congregation, settings: CongSettingsType) => {
 	return saveCongregationData(
 		congregation,
-		() => setCongregationSettings(congregation.id, settings),
+		() => setCongregationSettings(congregation.id, settings, congregation.settings),
 		'cong_settings',
 		getSettingsMetadata,
 		() => {

@@ -13,6 +13,7 @@ import {
 	getUserAuxiliaryApplications,
 	submitUserAuxiliaryApplication,
 	submitUserFieldServiceReport,
+	UserCongregationActivityError,
 } from '#modules/users/index.js';
 
 
@@ -23,7 +24,8 @@ export type PocketUserErrorCode =
 	| 'USER_NOT_FOUND'
 	| 'SESSION_NOT_FOUND'
 	| 'CONGREGATION_NOT_FOUND'
-	| 'MEMBERSHIP_REQUIRED';
+	| 'MEMBERSHIP_REQUIRED'
+	| 'REPORTS_LOCAL_ONLY';
 
 export class PocketUserError extends Error {
 	constructor(public readonly code: PocketUserErrorCode) {
@@ -101,7 +103,16 @@ export const submitPocketReport = async (
 	submitReport: typeof submitUserFieldServiceReport = submitUserFieldServiceReport,
 ): Promise<void> => {
 	getAuthorizedPocketUser(userId);
-	await submitReport(userId, report);
+
+	try {
+		await submitReport(userId, report);
+	} catch (error) {
+		if (error instanceof UserCongregationActivityError && error.code === 'REPORTS_LOCAL_ONLY') {
+			throw new PocketUserError('REPORTS_LOCAL_ONLY');
+		}
+
+		throw error;
+	}
 };
 
 export const getPocketApplications = (userId: string) => {

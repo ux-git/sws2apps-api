@@ -16,6 +16,9 @@ import {
 	getPublicSchedules,
 	getPublicSources,
 	getUpcomingEvents,
+	getLocalOnlySetting,
+	isLocalOnlyCategory,
+	omitLocalOnlyMetadata,
 } from '#modules/congregations/index.js';
 import {
 	UsersList,
@@ -162,6 +165,7 @@ const addPocketSettingsChanges = (
 	if (localCongregationSettingsDate !== metadata.cong_settings) {
 		if (congregation.settings.data_sync.value) {
 			backup.app_settings.cong_settings = structuredClone(congregation.settings);
+			delete backup.app_settings.cong_settings.local_only_categories;
 			backup.app_settings.cong_settings.cong_master_key = undefined;
 		} else {
 			const midweekMeeting = congregation.settings.midweek_meeting.map(({ type, time, weekday, _deleted }) => ({
@@ -188,6 +192,11 @@ const addPocketSettingsChanges = (
 		}
 
 		backup.metadata.cong_settings = localCongregationSettingsDate;
+	}
+
+	// as in the VIP backup, the setting only travels while data sync is on
+	if (congregation.settings.data_sync.value) {
+		backup.local_only_categories = getLocalOnlySetting(congregation.settings);
 	}
 };
 
@@ -260,7 +269,8 @@ const addPrivateBackupChanges = async (
 
 	if (
 		congregation.metadata.cong_field_service_reports !== metadata.cong_field_service_reports &&
-		user.profile.congregation?.user_local_uid
+		user.profile.congregation?.user_local_uid &&
+		!isLocalOnlyCategory(congregation.settings, 'cong_field_service_reports')
 	) {
 		const reports = await getFieldServiceReports(congregation.id);
 		backup.cong_field_service_reports = reports.filter((record) => {
@@ -310,7 +320,12 @@ export const submitPocketBackup = async (
 	} = getPocketBackupContext(userId, metadataHeader);
 	const currentMetadata = { ...congregation.metadata, ...user.metadata };
 
-	if (findBackupMetadataConflict(currentMetadata, incomingMetadata)) {
+	if (
+		findBackupMetadataConflict(
+			currentMetadata,
+			omitLocalOnlyMetadata(incomingMetadata, congregation.settings),
+		)
+	) {
 		throw new PocketBackupError('BACKUP_OUTDATED');
 	}
 

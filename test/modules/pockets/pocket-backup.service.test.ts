@@ -101,6 +101,43 @@ describe('Pocket backup submission', () => {
 		});
 	}
 
+	it('echoes the local-only setting beside the settings and withholds own reports', async () => {
+		const { congregation, metadata, user } = createPocketBackupContext();
+		congregation.members = [user];
+		congregation.settings.data_sync.value = true;
+		congregation.settings.local_only_categories = {
+			cong_field_service_reports: { value: true, updatedAt: '2026-02-01T00:00:00.000Z' },
+		};
+		const requestedMetadata = JSON.parse(metadata) as Record<string, string>;
+		requestedMetadata.cong_settings = 'old-congregation-settings';
+		requestedMetadata.cong_field_service_reports = 'old-reports';
+
+		const backup = await retrievePocketBackup(user.id, JSON.stringify(requestedMetadata));
+
+		assert.deepEqual(backup.local_only_categories, {
+			cong_field_service_reports: { value: true, updatedAt: '2026-02-01T00:00:00.000Z' },
+		});
+		assert.equal(backup.app_settings.cong_settings?.local_only_categories, undefined);
+		assert.equal(backup.cong_field_service_reports, undefined);
+	});
+
+	it('accepts an upload whose only stale version is a local-only category', async () => {
+		const { backup, congregation, user } = createPocketBackupContext();
+		congregation.settings.local_only_categories = {
+			cong_field_service_reports: { value: true, updatedAt: '2026-02-01T00:00:00.000Z' },
+		};
+		congregation.metadata.cong_field_service_reports = '2026-03-01T00:00:00.000Z';
+		const staleMetadata = JSON.stringify({
+			...congregation.metadata,
+			...user.metadata,
+			cong_field_service_reports: '2026-01-01T00:00:00.000Z',
+		});
+
+		await submitPocketBackup(user.id, staleMetadata, backup, {
+			saveBackup: async () => ({ status: 'saved' }),
+		});
+	});
+
 	it('awaits a successful persistence outcome', async () => {
 		const { backup, metadata, user } = createPocketBackupContext();
 		let persistenceCompleted = false;

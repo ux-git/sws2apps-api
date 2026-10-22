@@ -7,6 +7,7 @@ import {
 } from '#platform/firebase/storage.js';
 import { logger } from '#platform/logging/logger.js';
 import type { CongSettingsType } from '../types/congregations.types.js';
+import { parseStoredLocalOnlySetting } from '../local-only-categories.js';
 
 export const getCongregationSettings = async (cong_id: string) => {
 	const data = await getFileFromStorage({ type: 'congregation', path: `${cong_id}/settings/main.txt` });
@@ -17,6 +18,23 @@ export const getCongregationSettings = async (cong_id: string) => {
 	}
 
 	const result: CongSettingsType = JSON.parse(data!);
+
+	const localOnlyPath = { type: 'congregation' as const, path: `${cong_id}/settings/local_only.txt` };
+
+	// a file that exists but cannot be decrypted or parsed is unreadable too
+	if (await getFileMetadata(localOnlyPath)) {
+		const localOnly = await getFileFromStorage(localOnlyPath);
+		const { setting, readable } = parseStoredLocalOnlySetting(localOnly ?? '');
+
+		if (!readable) {
+			logger(LogLevel.Error, 'local-only setting unreadable, keeping all reports local-only', {
+				service: 'firebase',
+			});
+		}
+
+		result.local_only_categories = setting;
+	}
+
 	return result;
 };
 
@@ -31,8 +49,29 @@ export const getCongregationFlags = async (cong_id: string) => {
 	return [];
 };
 
-export const setCongregationSettings = async (id: string, settings: CongSettingsType) => {
-	const data = JSON.stringify(settings);
+// the local-only setting lives in its own file, so an API that predates it
+// never serves it to clients and stays safe to roll back; it is only written
+// when it changes
+export const setCongregationSettings = async (
+	id: string,
+	settings: CongSettingsType,
+	previous?: CongSettingsType,
+) => {
+	const { local_only_categories, ...mainSettings } = settings;
+
+	const changed =
+		JSON.stringify(local_only_categories) !== JSON.stringify(previous?.local_only_categories);
+
+	// a fail-closed stand-in is only written together with a real change, which
+	// replaces the unreadable file with every category still local-only
+	if (local_only_categories && changed) {
+		await uploadFileToStorage(JSON.stringify(local_only_categories), {
+			type: 'congregation',
+			path: `${id}/settings/local_only.txt`,
+		});
+	}
+
+	const data = JSON.stringify(mainSettings);
 	const path = `${id}/settings/main.txt`;
 	await uploadFileToStorage(data, { type: 'congregation', path });
 };

@@ -2,6 +2,10 @@ import type { AppRoleType } from '#domain/users/app-role.js';
 import { getUserCapabilities } from '#domain/users/user-capabilities.js';
 import {
 	type Congregation,
+	getLocalOnlyCategories,
+	isLocalOnlyCategory,
+	type LocalOnlyCategory,
+	sanitizeLocalOnlySetting,
 	saveCongregationIncomingReports,
 	saveCongregationOutgoingSpeakers,
 	saveCongregationPersons,
@@ -76,8 +80,13 @@ const saveAdministrationAndSchedules = async (
 	backup: BackupDataWithOptionalMetadata,
 	capabilities: ReturnType<typeof getUserCapabilities>,
 	operations: CongregationBackupOperations,
+	isKeptLocal: (category: LocalOnlyCategory) => boolean,
 ): Promise<void> => {
-	if (capabilities.adminRole && backup.branch_cong_analysis) {
+	if (
+		capabilities.adminRole &&
+		backup.branch_cong_analysis &&
+		!isKeptLocal('branch_cong_analysis')
+	) {
 		await operations.saveStandardData(
 			congregation,
 			'branch_cong_analysis',
@@ -85,7 +94,11 @@ const saveAdministrationAndSchedules = async (
 		);
 	}
 
-	if (capabilities.adminRole && backup.branch_field_service_reports) {
+	if (
+		capabilities.adminRole &&
+		backup.branch_field_service_reports &&
+		!isKeptLocal('branch_field_service_reports')
+	) {
 		await operations.saveStandardData(
 			congregation,
 			'branch_field_service_reports',
@@ -115,8 +128,13 @@ const saveReportsAndEvents = async (
 	backup: BackupDataWithOptionalMetadata,
 	capabilities: ReturnType<typeof getUserCapabilities>,
 	operations: CongregationBackupOperations,
+	isKeptLocal: (category: LocalOnlyCategory) => boolean,
 ): Promise<void> => {
-	if (capabilities.reportEditorRole && backup.cong_field_service_reports) {
+	if (
+		capabilities.reportEditorRole &&
+		backup.cong_field_service_reports &&
+		!isKeptLocal('cong_field_service_reports')
+	) {
 		await operations.saveStandardData(
 			congregation,
 			'cong_field_service_reports',
@@ -140,7 +158,11 @@ const saveReportsAndEvents = async (
 		await operations.saveOutgoingSpeakers(congregation, backup.outgoing_speakers);
 	}
 
-	if (capabilities.secretaryRole && backup.incoming_reports) {
+	if (
+		capabilities.secretaryRole &&
+		backup.incoming_reports &&
+		!isKeptLocal('cong_field_service_reports')
+	) {
 		await operations.saveIncomingReports(congregation, backup.incoming_reports);
 	}
 };
@@ -157,21 +179,54 @@ export const saveCongregationBackup = async (
 	operations: CongregationBackupOperations = defaultCongregationBackupOperations,
 ): Promise<void> => {
 	const capabilities = getUserCapabilities(userRoles);
+	let localOnly = getLocalOnlyCategories(congregation.settings);
 
 	if (capabilities.scheduleEditor && backup.app_settings?.cong_settings) {
 		const incomingSettings = structuredClone(backup.app_settings.cong_settings);
 		incomingSettings.cong_access_code = congregation.settings.cong_access_code;
 		incomingSettings.cong_master_key = congregation.settings.cong_master_key;
 
+		const localOnlySetting = sanitizeLocalOnlySetting(incomingSettings.local_only_categories);
+		delete incomingSettings.local_only_categories;
+
+		// turning congregation reports local-only clears the server copy, so only
+		// the secretary, who holds the reference copy, may turn it on; any admin
+		// may turn it off again
+		if (
+			localOnlySetting?.cong_field_service_reports?.value === true &&
+			!capabilities.secretaryRole
+		) {
+			delete localOnlySetting.cong_field_service_reports;
+		}
+
+		if (capabilities.adminRole && localOnlySetting) {
+			incomingSettings.local_only_categories = localOnlySetting;
+		}
+
 		const settings = structuredClone(congregation.settings);
 		mergeIncomingData(settings, incomingSettings);
 		await operations.saveSettings(congregation, settings);
+
+		const previousLocalOnly = localOnly;
+		localOnly = getLocalOnlyCategories(settings);
+
+		// drop the copies the server already holds once a category becomes local-only
+		for (const category of localOnly) {
+			if (previousLocalOnly.includes(category)) continue;
+
+			await operations.saveStandardData(congregation, category, []);
+		}
 	}
+
+	// a concurrent upload may have changed the setting since this request began
+	const isKeptLocal = (category: LocalOnlyCategory) => {
+		return localOnly.includes(category) || isLocalOnlyCategory(congregation.settings, category);
+	};
 
 	if (congregation.settings.data_sync.value) {
 		await savePeopleAndSpeakers(congregation, backup, capabilities, operations);
-		await saveAdministrationAndSchedules(congregation, backup, capabilities, operations);
-		await saveReportsAndEvents(congregation, backup, capabilities, operations);
+		await saveAdministrationAndSchedules(congregation, backup, capabilities, operations, isKeptLocal);
+		await saveReportsAndEvents(congregation, backup, capabilities, operations, isKeptLocal);
 	}
 
 	if (capabilities.adminRole && backup.cong_users) {

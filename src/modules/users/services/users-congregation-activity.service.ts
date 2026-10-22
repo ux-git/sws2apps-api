@@ -11,6 +11,7 @@ import {
 	getRejectedSpeakerRequests,
 	getRemoteSpeakerCongregations,
 	isCongregationMember,
+	isLocalOnlyCategory,
 	getCongregationPersons,
 	saveCongregationIncomingReports,
 	saveCongregationPersons,
@@ -23,7 +24,8 @@ import { updateUserProfile } from './user-data.service.js';
 export type UserCongregationActivityErrorCode =
 	| 'USER_NOT_FOUND'
 	| 'CONGREGATION_NOT_ASSIGNED'
-	| 'CONGREGATION_NOT_FOUND';
+	| 'CONGREGATION_NOT_FOUND'
+	| 'REPORTS_LOCAL_ONLY';
 
 export class UserCongregationActivityError extends Error {
 	constructor(public readonly code: UserCongregationActivityErrorCode) {
@@ -102,6 +104,11 @@ export const submitUserFieldServiceReport = async (
 	operations: Pick<Partial<UserCongregationSubmissionOperations>, 'saveIncomingReports'> = {},
 ): Promise<void> => {
 	const { congregation } = getUserCongregation(userId);
+
+	if (isLocalOnlyCategory(congregation.settings, 'cong_field_service_reports')) {
+		throw new UserCongregationActivityError('REPORTS_LOCAL_ONLY');
+	}
+
 	await saveIncomingFieldServiceReport(congregation, report, operations);
 };
 
@@ -201,6 +208,8 @@ export const getUserCongregationUpdates = async (
 		updates.rejected_requests = getRejectedSpeakerRequests(congregation, CongregationsList.list);
 	}
 
+	// S-4 reports submitted before the switch still reach the secretary, and the
+	// fetch removes them from the server
 	if (isSecretary) {
 		updates.incoming_reports = congregation.incoming_reports;
 

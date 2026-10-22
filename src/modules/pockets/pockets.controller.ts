@@ -76,6 +76,11 @@ const handlePocketUserError = (error: unknown, res: Response): boolean => {
 		return true;
 	}
 
+	if (error.code === 'REPORTS_LOCAL_ONLY') {
+		sendClientError(res, 409, 'error_api_reports-local-only', 'congregation keeps field service reports off the server');
+		return true;
+	}
+
 	sendClientError(res, 403, 'error_api_unauthorized-request', 'user not authorized to access the provided congregation');
 	return true;
 };

@@ -17,7 +17,9 @@ import {
 	getSources,
 	getSpeakersCongregations,
 	getUpcomingEvents,
+	getLocalOnlySetting,
 	getVisitingSpeakers,
+	isLocalOnlyCategory,
 } from '#modules/congregations/index.js';
 import {
 	getUserBackupContext,
@@ -115,6 +117,7 @@ const addSynchronizedSettingsAndGroups = async (context: UserBackupContext): Pro
 	if (congregation.metadata.cong_settings !== metadata.cong_settings) {
 		const localDate = congregation.metadata.cong_settings;
 		result.app_settings.cong_settings = structuredClone(congregation.settings);
+		delete result.app_settings.cong_settings.local_only_categories;
 
 		if (!masterKeyNeed) {
 			result.app_settings.cong_settings.cong_master_key = undefined;
@@ -122,6 +125,9 @@ const addSynchronizedSettingsAndGroups = async (context: UserBackupContext): Pro
 
 		result.metadata.cong_settings = localDate;
 	}
+
+	// only reached while data sync is on, as in the Pocket backup
+	result.local_only_categories = getLocalOnlySetting(congregation.settings);
 
 	if (congregation.metadata.field_service_groups !== metadata.field_service_groups) {
 		const localDate = congregation.metadata.field_service_groups;
@@ -174,6 +180,8 @@ const addCongregationReports = async (context: UserBackupContext): Promise<void>
 
 	if (!reportEditorRole) return;
 
+	if (isLocalOnlyCategory(congregation.settings, 'cong_field_service_reports')) return;
+
 	if (congregation.metadata.cong_field_service_reports !== metadata.cong_field_service_reports) {
 		const localDate = congregation.metadata.cong_field_service_reports;
 		result.cong_field_service_reports = await backupOperations.getFieldServiceReports(congregation.id);
@@ -216,7 +224,11 @@ const addPublisherReports = async (context: UserBackupContext): Promise<void> =>
 		result.metadata.delegated_field_service_reports = localDate;
 	}
 
-	if (!result.cong_field_service_reports && user.profile.congregation!.user_local_uid) {
+	if (
+		!result.cong_field_service_reports &&
+		user.profile.congregation!.user_local_uid &&
+		!isLocalOnlyCategory(congregation.settings, 'cong_field_service_reports')
+	) {
 		if (congregation.metadata.cong_field_service_reports !== metadata.cong_field_service_reports) {
 			const localDate = congregation.metadata.cong_field_service_reports;
 			const reports = await backupOperations.getFieldServiceReports(congregation.id);
@@ -331,6 +343,8 @@ const addIncomingReports = async (context: UserBackupContext): Promise<void> => 
 
 	if (!secretaryRole) return;
 
+	if (isLocalOnlyCategory(congregation.settings, 'cong_field_service_reports')) return;
+
 	if (congregation.metadata.incoming_reports !== metadata.incoming_reports) {
 		const localDate = congregation.metadata.incoming_reports;
 		result.incoming_reports = congregation.incoming_reports;
@@ -344,13 +358,19 @@ const addAdministrationData = async (context: UserBackupContext): Promise<void> 
 
 	if (!adminRole) return;
 
-	if (congregation.metadata.branch_cong_analysis !== metadata.branch_cong_analysis) {
+	if (
+		congregation.metadata.branch_cong_analysis !== metadata.branch_cong_analysis &&
+		!isLocalOnlyCategory(congregation.settings, 'branch_cong_analysis')
+	) {
 		const localDate = congregation.metadata.branch_cong_analysis;
 		result.branch_cong_analysis = await backupOperations.getBranchCongAnalysis(congregation.id);
 		result.metadata.branch_cong_analysis = localDate;
 	}
 
-	if (congregation.metadata.branch_field_service_reports !== metadata.branch_field_service_reports) {
+	if (
+		congregation.metadata.branch_field_service_reports !== metadata.branch_field_service_reports &&
+		!isLocalOnlyCategory(congregation.settings, 'branch_field_service_reports')
+	) {
 		const localDate = congregation.metadata.branch_field_service_reports;
 		result.branch_field_service_reports = await backupOperations.getBranchFieldServiceReports(congregation.id);
 		result.metadata.branch_field_service_reports = localDate;

@@ -15,7 +15,10 @@ import {
 	parseUserBackupMetadata,
 	UserBackupError,
 } from '../user-backup-context.js';
-import { saveCongregationSettings } from '#modules/congregations/index.js';
+import {
+	omitLocalOnlyMetadata,
+	saveCongregationSettings,
+} from '#modules/congregations/index.js';
 
 export const filterBackupMetadata = (
 	metadata: Record<string, string>,
@@ -51,9 +54,12 @@ export const saveUserBackup = async (
 		throw error;
 	}
 
-	const incomingMetadata = filterBackupMetadata(
-		congregationBackup.metadata,
-		congregation.settings.data_sync.value,
+	const incomingMetadata = omitLocalOnlyMetadata(
+		filterBackupMetadata(
+			congregationBackup.metadata,
+			congregation.settings.data_sync.value,
+		),
+		congregation.settings,
 	);
 	congregationBackup.metadata = incomingMetadata;
 	const currentMetadata = { ...congregation.metadata, ...user.metadata };
@@ -109,9 +115,12 @@ export const saveUserChunkedBackup = async (
 	chunk: SaveUserChunkedBackupChunk,
 ): Promise<SaveUserChunkedBackupOutcome> => {
 	const { user, congregation } = getUserBackupContext(userId);
-	const incomingMetadata = filterBackupMetadata(
-		parseUserBackupMetadata(metadataHeader),
-		congregation.settings.data_sync.value,
+	const incomingMetadata = omitLocalOnlyMetadata(
+		filterBackupMetadata(
+			parseUserBackupMetadata(metadataHeader),
+			congregation.settings.data_sync.value,
+		),
+		congregation.settings,
 	);
 	const currentMetadata = { ...congregation.metadata, ...user.metadata };
 	const metadataConflict = findBackupMetadataConflict(

@@ -1,6 +1,6 @@
 import type { AppRoleType } from '#domain/users/app-role.js';
 import type { StandardRecord } from '../../types/standard-record.js';
-import type { CongSettingsType } from '#modules/congregations/index.js';
+import type { CongSettingsType, LocalOnlySetting } from '#modules/congregations/index.js';
 
 export type BackupData = {
 	speakers_key?: string;
@@ -30,6 +30,7 @@ export type BackupData = {
 		role?: AppRoleType[];
 	}[];
 	metadata: Record<string, string>;
+	local_only_categories?: LocalOnlySetting;
 };
 
 /**

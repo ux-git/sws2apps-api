@@ -58,6 +58,36 @@ describe('Pocket user service', () => {
 		}
 	});
 
+	it('maps a local-only report rejection to a Pocket domain error', async () => {
+		const originalUsers = UsersList.list;
+		const originalCongregations = CongregationsList.list;
+		const user = new User('user-1');
+		const congregation = new Congregation('congregation-1');
+		user.profile.congregation = {
+			id: congregation.id,
+			cong_role: ['publisher'],
+			account_type: 'pocket',
+		};
+		congregation.settings.local_only_categories = {
+			cong_field_service_reports: { value: true, updatedAt: '2026-02-01T00:00:00.000Z' },
+		};
+		UsersList.list = [user];
+		CongregationsList.list = [congregation];
+
+		try {
+			await assert.rejects(
+				submitPocketReport(user.id, { report_month: '2026/09', hours: 10 }),
+				(error: unknown) => {
+					return error instanceof PocketUserError
+						&& error.code === 'REPORTS_LOCAL_ONLY';
+				},
+			);
+		} finally {
+			UsersList.list = originalUsers;
+			CongregationsList.list = originalCongregations;
+		}
+	});
+
 	it('propagates report persistence failures', async () => {
 		const originalUsers = UsersList.list;
 		const originalCongregations = CongregationsList.list;

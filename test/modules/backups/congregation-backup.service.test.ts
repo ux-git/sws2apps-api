@@ -151,6 +151,197 @@ describe('congregation backup persistence', () => {
 		assert.deepEqual(recorder.savedOperations, ['settings', 'persons', 'schedules', 'sources']);
 	});
 
+	it('purges and stops storing categories the secretary keeps local-only', async () => {
+		const congregation = new Congregation('congregation-1');
+		congregation.settings.data_sync.value = true;
+		const backup = createBackup();
+		backup.app_settings.cong_settings = structuredClone(congregation.settings);
+		backup.app_settings.cong_settings.local_only_categories = {
+			cong_field_service_reports: { value: true, updatedAt: '2026-02-01T00:00:00.000Z' },
+			branch_cong_analysis: { value: true, updatedAt: '2026-02-01T00:00:00.000Z' },
+			...({ persons: { value: true, updatedAt: '2026-02-01T00:00:00.000Z' } } as object),
+		};
+		const recorder = createOperations();
+		const savedRecords = new Map<string, unknown[]>();
+		recorder.operations.saveStandardData = async (_congregation, dataType, records) => {
+			recorder.savedOperations.push(dataType);
+			savedRecords.set(dataType, records);
+		};
+
+		const savedIncomingReports: unknown[][] = [];
+		recorder.operations.saveIncomingReports = async (_congregation, reports) => {
+			recorder.savedOperations.push('incoming_reports');
+			savedIncomingReports.push(reports);
+		};
+
+		await saveCongregationBackup(congregation, backup, ['secretary'], recorder.operations);
+
+		assert.deepEqual(recorder.getSavedSettings()?.local_only_categories, {
+			cong_field_service_reports: { value: true, updatedAt: '2026-02-01T00:00:00.000Z' },
+			branch_cong_analysis: { value: true, updatedAt: '2026-02-01T00:00:00.000Z' },
+		});
+		assert.deepEqual(savedRecords.get('cong_field_service_reports'), []);
+		assert.deepEqual(savedRecords.get('branch_cong_analysis'), []);
+		assert.deepEqual(savedIncomingReports, []);
+		assert.equal(
+			recorder.savedOperations.filter((operation) => operation === 'cong_field_service_reports').length,
+			1,
+		);
+		assert.ok(recorder.savedOperations.includes('branch_field_service_reports'));
+		assert.ok(recorder.savedOperations.includes('persons'));
+	});
+
+	it('stores records sent in the same backup that turns local-only off', async () => {
+		const congregation = new Congregation('congregation-1');
+		congregation.settings.data_sync.value = true;
+		congregation.settings.local_only_categories = {
+			cong_field_service_reports: { value: true, updatedAt: '2026-01-01T00:00:00.000Z' },
+		};
+		const backup = createBackup();
+		backup.app_settings.cong_settings = structuredClone(congregation.settings);
+		backup.app_settings.cong_settings.local_only_categories = {
+			cong_field_service_reports: { value: false, updatedAt: '2026-02-01T00:00:00.000Z' },
+		};
+		const recorder = createOperations();
+		recorder.operations.saveSettings = async (_congregation, settings) => {
+			recorder.savedOperations.push('settings');
+			congregation.settings = settings;
+		};
+
+		await saveCongregationBackup(congregation, backup, ['secretary'], recorder.operations);
+
+		assert.ok(recorder.savedOperations.includes('cong_field_service_reports'));
+	});
+
+	it('keeps stored local-only categories when a schedule editor sends an older copy', async () => {
+		const congregation = new Congregation('congregation-1');
+		congregation.settings.data_sync.value = true;
+		congregation.settings.local_only_categories = {
+			cong_field_service_reports: { value: true, updatedAt: '2026-01-01T00:00:00.000Z' },
+		};
+		const backup = createBackup();
+		backup.app_settings.cong_settings = structuredClone(congregation.settings);
+		backup.app_settings.cong_settings.local_only_categories = {
+			cong_field_service_reports: { value: false, updatedAt: '2026-02-01T00:00:00.000Z' },
+		};
+		const recorder = createOperations();
+
+		await saveCongregationBackup(congregation, backup, ['elder', 'midweek_schedule'], recorder.operations);
+
+		assert.deepEqual(recorder.getSavedSettings()?.local_only_categories, {
+			cong_field_service_reports: { value: true, updatedAt: '2026-01-01T00:00:00.000Z' },
+		});
+		assert.ok(!recorder.savedOperations.includes('cong_field_service_reports'));
+	});
+
+	it('merges each category on its own so a stale admin copy cannot undo another', async () => {
+		const congregation = new Congregation('congregation-1');
+		congregation.settings.data_sync.value = true;
+		congregation.settings.local_only_categories = {
+			cong_field_service_reports: { value: true, updatedAt: '2026-02-01T00:00:00.000Z' },
+		};
+		const backup = createBackup();
+		backup.app_settings.cong_settings = structuredClone(congregation.settings);
+		backup.app_settings.cong_settings.local_only_categories = {
+			branch_cong_analysis: { value: true, updatedAt: '2026-03-01T00:00:00.000Z' },
+		};
+		const recorder = createOperations();
+
+		await saveCongregationBackup(congregation, backup, ['coordinator'], recorder.operations);
+
+		assert.deepEqual(recorder.getSavedSettings()?.local_only_categories, {
+			cong_field_service_reports: { value: true, updatedAt: '2026-02-01T00:00:00.000Z' },
+			branch_cong_analysis: { value: true, updatedAt: '2026-03-01T00:00:00.000Z' },
+		});
+		assert.ok(!recorder.savedOperations.includes('cong_field_service_reports'));
+	});
+
+	it('leaves queued S-4 reports for the secretary to fetch when reports turn local-only', async () => {
+		const congregation = new Congregation('congregation-1');
+		congregation.settings.data_sync.value = true;
+		congregation.incoming_reports = [{ report_id: 'report-1', person_uid: 'person-1' }];
+		const backup = createBackup();
+		backup.app_settings.cong_settings = structuredClone(congregation.settings);
+		backup.app_settings.cong_settings.local_only_categories = {
+			cong_field_service_reports: { value: true, updatedAt: '2026-02-01T00:00:00.000Z' },
+		};
+		const recorder = createOperations();
+		const savedRecords = new Map<string, unknown[]>();
+		recorder.operations.saveStandardData = async (_congregation, dataType, records) => {
+			savedRecords.set(dataType, records);
+		};
+		let queueWritten = false;
+		recorder.operations.saveIncomingReports = async () => {
+			queueWritten = true;
+		};
+
+		await saveCongregationBackup(congregation, backup, ['secretary'], recorder.operations);
+
+		assert.deepEqual(savedRecords.get('cong_field_service_reports'), []);
+		assert.equal(queueWritten, false);
+		assert.equal(congregation.incoming_reports.length, 1);
+	});
+
+	it('lets any admin turn congregation reports off and strips client-only fields', async () => {
+		const congregation = new Congregation('congregation-1');
+		congregation.settings.data_sync.value = true;
+		congregation.settings.local_only_categories = {
+			cong_field_service_reports: { value: true, updatedAt: '2026-01-01T00:00:00.000Z' },
+		};
+		const backup = createBackup();
+		backup.app_settings.cong_settings = structuredClone(congregation.settings);
+		// the shape the app sends: a pending entry carries confirmed: false
+		backup.app_settings.cong_settings.local_only_categories = {
+			cong_field_service_reports: {
+				value: false,
+				updatedAt: '2026-02-01T00:00:00.000Z',
+				confirmed: false,
+			} as never,
+		};
+		const recorder = createOperations();
+
+		await saveCongregationBackup(congregation, backup, ['coordinator'], recorder.operations);
+
+		assert.deepEqual(recorder.getSavedSettings()?.local_only_categories, {
+			cong_field_service_reports: { value: false, updatedAt: '2026-02-01T00:00:00.000Z' },
+		});
+	});
+
+	it('lets only the secretary switch congregation reports', async () => {
+		const congregation = new Congregation('congregation-1');
+		congregation.settings.data_sync.value = true;
+		const backup = createBackup();
+		backup.app_settings.cong_settings = structuredClone(congregation.settings);
+		backup.app_settings.cong_settings.local_only_categories = {
+			cong_field_service_reports: { value: true, updatedAt: '2026-02-01T00:00:00.000Z' },
+		};
+		const recorder = createOperations();
+		let incomingCleared = false;
+		recorder.operations.saveIncomingReports = async (_congregation, reports) => {
+			if (reports.length === 0) incomingCleared = true;
+		};
+
+		await saveCongregationBackup(congregation, backup, ['coordinator'], recorder.operations);
+
+		assert.deepEqual(recorder.getSavedSettings()?.local_only_categories, {});
+		assert.equal(incomingCleared, false);
+	});
+
+	it('ignores local-only changes from schedule editors without an admin role', async () => {
+		const congregation = new Congregation('congregation-1');
+		const backup = createBackup();
+		backup.app_settings.cong_settings = structuredClone(congregation.settings);
+		backup.app_settings.cong_settings.local_only_categories = {
+			cong_field_service_reports: { value: true, updatedAt: '2026-02-01T00:00:00.000Z' },
+		};
+		const recorder = createOperations();
+
+		await saveCongregationBackup(congregation, backup, ['midweek_schedule'], recorder.operations);
+
+		assert.equal(recorder.getSavedSettings()?.local_only_categories, undefined);
+		assert.deepEqual(recorder.savedOperations, ['settings']);
+	});
+
 	it('does not persist congregation data for an ordinary publisher', async () => {
 		const congregation = new Congregation('congregation-1');
 		congregation.settings.data_sync.value = true;

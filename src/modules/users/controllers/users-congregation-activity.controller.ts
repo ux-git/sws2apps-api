@@ -22,6 +22,11 @@ const handleUserCongregationActivityError = (
 		return true;
 	}
 
+	if (error.code === 'REPORTS_LOCAL_ONLY') {
+		sendClientError(res, 409, 'error_api_reports-local-only', 'congregation keeps field service reports off the server');
+		return true;
+	}
+
 	if (error.code === 'CONGREGATION_NOT_ASSIGNED') {
 		sendClientError(res, 400, 'CONG_NOT_ASSIGNED', 'user does not have an assigned congregation');
 		return true;

@@ -157,6 +157,29 @@ describe('user congregation activity persistence', () => {
 		assert.equal(congregation.incoming_reports[0]?.hours, 8);
 	});
 
+	it('rejects field service reports while the congregation keeps them local-only', async () => {
+		const { congregation, user } = createCongregationActivityContext();
+		congregation.settings.local_only_categories = {
+			cong_field_service_reports: { value: true, updatedAt: '2099-01-01T00:00:00.000Z' },
+		};
+
+		await assert.rejects(
+			submitUserFieldServiceReport(
+				user.id,
+				{ report_month: '2026/09', person_uid: 'person-1', hours: 8 },
+				{
+					saveIncomingReports: async () => {
+						throw new Error('must not persist');
+					},
+				},
+			),
+			(error: unknown) => {
+				return error instanceof UserCongregationActivityError
+					&& error.code === 'REPORTS_LOCAL_ONLY';
+			},
+		);
+	});
+
 	it('keeps report state unchanged when persistence fails', async () => {
 		const { congregation, user } = createCongregationActivityContext();
 		congregation.incoming_reports = [{

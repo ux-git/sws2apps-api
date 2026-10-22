@@ -288,4 +288,44 @@ describe('user backup retrieval permissions', () => {
 			role: ['admin'],
 		}]);
 	});
+
+	it('never serves categories the congregation keeps local-only', async () => {
+		const { congregation, matchingMetadata, user } = createBackupContext(
+			['admin', 'publisher'],
+			true,
+		);
+		congregation.settings.local_only_categories = {
+			cong_field_service_reports: { value: true, updatedAt: '2026-02-01T00:00:00.000Z' },
+			branch_cong_analysis: { value: true, updatedAt: '2026-02-01T00:00:00.000Z' },
+		};
+		const requestedMetadata = JSON.parse(matchingMetadata) as Record<string, string>;
+		requestedMetadata.cong_field_service_reports = 'client-report-date';
+		requestedMetadata.branch_cong_analysis = 'client-analysis-date';
+		requestedMetadata.branch_field_service_reports = 'client-branch-date';
+		requestedMetadata.cong_settings = 'client-settings-date';
+
+		const backup = await retrieveUserBackup(
+			user.id,
+			JSON.stringify(requestedMetadata),
+			{
+				getFieldServiceReports: async () => {
+					throw new Error('local-only reports must not be read');
+				},
+				getBranchCongAnalysis: async () => {
+					throw new Error('local-only analysis must not be read');
+				},
+				getBranchFieldServiceReports: async () => [{ id: 'report-1' }],
+				getPublicIncomingTalks: async () => [],
+			},
+		);
+
+		assert.equal(backup.cong_field_service_reports, undefined);
+		assert.equal(backup.branch_cong_analysis, undefined);
+		assert.deepEqual(backup.branch_field_service_reports, [{ id: 'report-1' }]);
+		assert.deepEqual(backup.local_only_categories, {
+			cong_field_service_reports: { value: true, updatedAt: '2026-02-01T00:00:00.000Z' },
+			branch_cong_analysis: { value: true, updatedAt: '2026-02-01T00:00:00.000Z' },
+		});
+		assert.equal(backup.app_settings.cong_settings?.local_only_categories, undefined);
+	});
 });
