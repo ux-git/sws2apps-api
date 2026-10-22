@@ -282,6 +282,39 @@ describe('congregation backup persistence', () => {
 		assert.equal(congregation.incoming_reports.length, 1);
 	});
 
+	it('stores the app modules choice from admins only', async () => {
+		const congregation = new Congregation('congregation-1');
+		const backup = createBackup();
+		backup.app_settings.cong_settings = structuredClone(congregation.settings);
+		backup.app_settings.cong_settings.app_modules = {
+			meeting_attendance: { enabled: true, sync: 'local', updatedAt: '2026-02-01T00:00:00.000Z' },
+		};
+
+		const asEditor = createOperations();
+		await saveCongregationBackup(congregation, backup, ['midweek_schedule'], asEditor.operations);
+		assert.equal(asEditor.getSavedSettings()?.app_modules, undefined);
+
+		const asAdmin = createOperations();
+		await saveCongregationBackup(congregation, backup, ['coordinator'], asAdmin.operations);
+		assert.deepEqual(asAdmin.getSavedSettings()?.app_modules, {
+			meeting_attendance: { enabled: true, sync: 'local', updatedAt: '2026-02-01T00:00:00.000Z' },
+		});
+	});
+
+	it('keeps meeting attendance off the server when it is local-only', async () => {
+		const congregation = new Congregation('congregation-1');
+		congregation.settings.data_sync.value = true;
+		congregation.settings.local_only_categories = {
+			meeting_attendance: { value: true, updatedAt: '2026-02-01T00:00:00.000Z' },
+		};
+		const recorder = createOperations();
+
+		await saveCongregationBackup(congregation, createBackup(), ['secretary'], recorder.operations);
+
+		assert.ok(!recorder.savedOperations.includes('meeting_attendance'));
+		assert.ok(recorder.savedOperations.includes('cong_field_service_reports'));
+	});
+
 	it('lets any admin turn congregation reports off and strips client-only fields', async () => {
 		const congregation = new Congregation('congregation-1');
 		congregation.settings.data_sync.value = true;

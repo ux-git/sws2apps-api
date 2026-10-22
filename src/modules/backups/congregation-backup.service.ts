@@ -5,6 +5,7 @@ import {
 	getLocalOnlyCategories,
 	isLocalOnlyCategory,
 	type LocalOnlyCategory,
+	sanitizeAppModulesSetting,
 	sanitizeLocalOnlySetting,
 	saveCongregationIncomingReports,
 	saveCongregationOutgoingSpeakers,
@@ -142,7 +143,11 @@ const saveReportsAndEvents = async (
 		);
 	}
 
-	if (capabilities.attendanceTracker && backup.meeting_attendance) {
+	if (
+		capabilities.attendanceTracker &&
+		backup.meeting_attendance &&
+		!isKeptLocal('meeting_attendance')
+	) {
 		await operations.saveStandardData(
 			congregation,
 			'meeting_attendance',
@@ -201,6 +206,14 @@ export const saveCongregationBackup = async (
 
 		if (capabilities.adminRole && localOnlySetting) {
 			incomingSettings.local_only_categories = localOnlySetting;
+		}
+
+		// which modules a congregation uses, and how each one syncs: admins only
+		const appModules = sanitizeAppModulesSetting(incomingSettings.app_modules);
+		delete incomingSettings.app_modules;
+
+		if (capabilities.adminRole && appModules) {
+			incomingSettings.app_modules = appModules;
 		}
 
 		const settings = structuredClone(congregation.settings);

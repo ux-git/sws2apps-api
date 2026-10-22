@@ -128,6 +128,7 @@ describe('local-only congregation categories', () => {
 				'cong_field_service_reports',
 				'branch_field_service_reports',
 				'branch_cong_analysis',
+				'meeting_attendance',
 			]);
 		}
 

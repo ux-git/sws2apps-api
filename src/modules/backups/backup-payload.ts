@@ -69,6 +69,7 @@ const CONG_SETTINGS_KEYS: readonly (keyof CongSettingsType)[] = [
 	'cong_discoverable',
 	'data_sync',
 	'local_only_categories',
+	'app_modules',
 	'fullname_option',
 	'short_date_format',
 	'display_name_enabled',

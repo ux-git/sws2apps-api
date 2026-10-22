@@ -330,6 +330,8 @@ const addAttendance = async (context: UserBackupContext): Promise<void> => {
 
 	if (!attendanceTracker) return;
 
+	if (isLocalOnlyCategory(congregation.settings, 'meeting_attendance')) return;
+
 	if (congregation.metadata.meeting_attendance !== metadata.meeting_attendance) {
 		const localDate = congregation.metadata.meeting_attendance;
 		result.meeting_attendance = await backupOperations.getMeetingAttendance(congregation.id);

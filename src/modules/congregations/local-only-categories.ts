@@ -4,6 +4,7 @@ export const LOCAL_ONLY_CATEGORIES = [
 	'cong_field_service_reports',
 	'branch_field_service_reports',
 	'branch_cong_analysis',
+	'meeting_attendance',
 ] as const;
 
 export type LocalOnlyCategory = (typeof LOCAL_ONLY_CATEGORIES)[number];

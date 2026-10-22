@@ -13,6 +13,7 @@ export * from './repositories/congregation-metadata.repository.js';
 export * from './repositories/congregation-settings.repository.js';
 export * from './congregations.js';
 export * from './local-only-categories.js';
+export * from './app-modules.js';
 export * from './services/outgoing-speakers.service.js';
 export type * from './congregation.js';
 export type * from './types/congregations.types.js';

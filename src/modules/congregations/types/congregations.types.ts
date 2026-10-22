@@ -1,5 +1,6 @@
 import type { StandardRecord } from '../../../types/standard-record.js';
 import type { LocalOnlySetting } from '../local-only-categories.js';
+import type { AppModulesSetting } from '../app-modules.js';
 
 export type CongregationMetadata = {
 	branch_cong_analysis: string;
@@ -138,6 +139,7 @@ export type CongSettingsType = {
 	cong_discoverable: { value: boolean; updatedAt: string };
 	data_sync: { value: boolean; updatedAt: string };
 	local_only_categories?: LocalOnlySetting;
+	app_modules?: AppModulesSetting;
 	fullname_option?: string;
 	short_date_format?: string;
 	display_name_enabled?: string;
