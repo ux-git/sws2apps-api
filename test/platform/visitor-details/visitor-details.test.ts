@@ -4,6 +4,7 @@ import { describe, it } from 'node:test';
 import {
 	mapProviderLocation,
 	normalizeIpLocation,
+	retrieveVisitorDetails,
 } from '#platform/visitor-details/visitor-details.js';
 
 describe('visitor location adapter', () => {
@@ -46,5 +47,22 @@ describe('visitor location adapter', () => {
 			city: '',
 			timezone: '',
 		});
+	});
+
+	it('leaves the location empty without contacting a lookup service when turned off', async () => {
+		const details = await retrieveVisitorDetails(
+			'203.0.113.10',
+			{ 'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)' },
+			false,
+		);
+
+		assert.deepEqual(details.ipLocation, {
+			continent_code: '',
+			country_name: '',
+			country_code: '',
+			city: '',
+			timezone: '',
+		});
+		assert.equal(details.ip, '203.0.113.10');
 	});
 });

@@ -1,6 +1,7 @@
 import type { IncomingHttpHeaders } from 'node:http';
 import fetch from 'node-fetch';
 import WhichBrowser from 'which-browser';
+import { env } from '#config/env.js';
 
 type LocationValue = string | string[];
 
@@ -101,11 +102,13 @@ const retrieveIpLocation = async (visitorIp: string): Promise<Partial<IpLocation
 	throw new Error('THIRDY_PARTY_ERROR_IP_DETAILS');
 };
 
+// with geolocation off, visitor IPs are never sent to the lookup services
 export const retrieveVisitorDetails = async (
 	visitorIp: string,
 	requestHeaders: IncomingHttpHeaders,
+	lookupLocation = env.visitorGeolocationEnabled,
 ) => {
-	const location = await retrieveIpLocation(visitorIp);
+	const location = lookupLocation ? await retrieveIpLocation(visitorIp) : {};
 	const browserDetails = new WhichBrowser(requestHeaders);
 
 	return {

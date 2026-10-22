@@ -88,6 +88,7 @@ export const env = Object.freeze({
 	appCongregationApi: readUrl('APP_CONGREGATION_API'),
 	trustedOrigins: readOrigins('APP_TRUSTED_ORIGINS'),
 	internetCheckEnabled: readBoolean('INTERNET_CHECK_ENABLED', true),
+	visitorGeolocationEnabled: readBoolean('VISITOR_GEOLOCATION_ENABLED', true),
 	firebaseAppName: readRequired('FIREBASE_APP_NAME'),
 	firebaseStorageBucket: readOptional('FIREBASE_STORAGE_BUCKET'),
 	firebaseStorageSuffix: readOptional('FIREBASE_STORAGE_SUFFIX') ?? 'firebasestorage.app',
