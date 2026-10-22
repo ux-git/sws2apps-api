@@ -33,6 +33,23 @@ const readBoolean = (name: string, fallback = false) => {
 	throw new Error(`Environment variable ${name} must be either true or false`);
 };
 
+const readOrigins = (name: string) => {
+	const value = readOptional(name);
+	if (!value) return [];
+
+	return value
+		.split(',')
+		.map((item) => item.trim())
+		.filter(Boolean)
+		.map((item) => {
+			try {
+				return new URL(item).origin;
+			} catch {
+				throw new Error(`Environment variable ${name} must be a comma-separated list of origins`);
+			}
+		});
+};
+
 const readPort = () => {
 	const value = readOptional('PORT');
 	if (!value) return 8000;
@@ -69,6 +86,7 @@ export const env = Object.freeze({
 	appVersion: applicationVersion,
 	appCountryApi: readUrl('APP_COUNTRY_API'),
 	appCongregationApi: readUrl('APP_CONGREGATION_API'),
+	trustedOrigins: readOrigins('APP_TRUSTED_ORIGINS'),
 	firebaseAppName: readRequired('FIREBASE_APP_NAME'),
 	firebaseStorageBucket: readOptional('FIREBASE_STORAGE_BUCKET'),
 	firebaseStorageSuffix: readOptional('FIREBASE_STORAGE_SUFFIX') ?? 'firebasestorage.app',

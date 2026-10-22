@@ -1,5 +1,6 @@
 import type { CorsOptions } from 'cors';
 import type { Request } from 'express';
+import { env } from '#config/env.js';
 
 const trustedApplicationOrigins = new Set([
 	'https://organized-app.com',
@@ -30,8 +31,14 @@ const normalizePath = (requestUri: string | undefined) => {
 	return requestUri.split(/[?#]/, 1)[0];
 };
 
-export const isTrustedApplicationOrigin = (origin: string | undefined): boolean => {
-	return Boolean(origin && trustedApplicationOrigins.has(origin));
+// a self-hosted deployment adds its own app origin through APP_TRUSTED_ORIGINS
+export const isTrustedApplicationOrigin = (
+	origin: string | undefined,
+	additionalOrigins: readonly string[] = env.trustedOrigins,
+): boolean => {
+	if (!origin) return false;
+
+	return trustedApplicationOrigins.has(origin) || additionalOrigins.includes(origin);
 };
 
 export const isProductionCorsRequestAllowed = (origin: string | undefined, requestPath: string | undefined) => {

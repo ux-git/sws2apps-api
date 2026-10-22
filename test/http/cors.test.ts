@@ -16,6 +16,11 @@ describe('production CORS policy', () => {
 		assert.equal(isTrustedApplicationOrigin('https://attacker.example'), false);
 	});
 
+	it('allows origins a self-hosted deployment configures', () => {
+		assert.equal(isTrustedApplicationOrigin('https://organized.example', ['https://organized.example']), true);
+		assert.equal(isTrustedApplicationOrigin('https://other.example', ['https://organized.example']), false);
+	});
+
 	it('allows the explicitly public cross-origin paths', () => {
 		assert.equal(isProductionCorsRequestAllowed('https://example.com', '/app-version'), true);
 		assert.equal(
