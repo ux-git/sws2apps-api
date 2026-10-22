@@ -1,11 +1,32 @@
-import { getStorage } from 'firebase-admin/storage';
-
+import { env } from '#config/env.js';
 import { decryptData, encryptData } from '#platform/encryption/encryption.js';
+import { createFilesystemStorage } from '#platform/storage/filesystem-storage.js';
+import type { StorageBackend } from '#platform/storage/storage-backend.types.js';
+import { firebaseStorage } from './firebase-storage.js';
 import type {
 	StorageBaseType,
 	StorageFileEntry,
 	StorageFileListOptions,
 } from './storage.types.js';
+
+let storageBackend: StorageBackend | undefined;
+
+const getStorageBackend = () => {
+	storageBackend ??=
+		env.storageBackend === 'filesystem'
+			? createFilesystemStorage(env.storageDirectory!)
+			: firebaseStorage;
+
+	return storageBackend;
+};
+
+/**
+ * Replaces the configured backend; meant for tests that exercise the storage
+ * operations against a temporary directory.
+ */
+export const setStorageBackend = (backend: StorageBackend | undefined) => {
+	storageBackend = backend;
+};
 
 export const buildStoragePath = (
 	{ path, type }: StorageBaseType,
@@ -28,43 +49,27 @@ export const buildStoragePath = (
 	return destinationPath;
 };
 
-export const uploadFileToStorage = async (
-	data: string,
-	options: StorageBaseType,
-) => {
-	const destinationPath = buildStoragePath(options);
-	const storageBucket = getStorage().bucket();
-	const file = storageBucket.file(destinationPath);
+const writeFileToStorage = async (data: string, options: StorageBaseType) => {
 	const encryptedData = encryptData(data);
 
-	await file.save(encryptedData, {
-		metadata: { contentType: 'text/plain' },
-	});
+	await getStorageBackend().save(buildStoragePath(options), encryptedData);
 
 	return encryptedData;
 };
 
-export const getFileMetadata = async (options: StorageBaseType) => {
-	const destinationPath = buildStoragePath(options, false);
-	const storageBucket = getStorage().bucket();
-	const file = storageBucket.file(destinationPath);
-	const [fileExists] = await file.exists();
+// writes to one file never interleave, whichever backend stores it
+export const uploadFileToStorage = (data: string, options: StorageBaseType) => {
+	return runWithinFileWriteQueue(buildStoragePath(options), () => writeFileToStorage(data, options));
+};
 
-	if (fileExists) {
-		return file.metadata;
-	}
+export const getFileMetadata = async (options: StorageBaseType) => {
+	return getStorageBackend().metadata(buildStoragePath(options, false));
 };
 
 export const getFileFromStorage = async (options: StorageBaseType) => {
-	const destinationPath = buildStoragePath(options);
-	const storageBucket = getStorage().bucket();
-	const file = storageBucket.file(destinationPath);
-	const [fileExists] = await file.exists();
+	const encryptedData = await getStorageBackend().read(buildStoragePath(options));
 
-	if (fileExists) {
-		const downloadedFile = await file.download();
-		const encryptedData = downloadedFile.toString();
-
+	if (encryptedData !== undefined) {
 		return decryptData(encryptedData);
 	}
 };
@@ -108,9 +113,10 @@ export type ReadModifyWriteFileOperations = {
 	write: (data: string, options: StorageBaseType) => Promise<string>;
 };
 
+// the write already runs inside the file's queue slot, so it must not queue again
 const defaultReadModifyWriteOperations: ReadModifyWriteFileOperations = {
 	read: (options) => getFileFromStorage(options),
-	write: (data, options) => uploadFileToStorage(data, options),
+	write: (data, options) => writeFileToStorage(data, options),
 };
 
 /**
@@ -148,24 +154,22 @@ export const readModifyWriteFile = async <T>(
 export const listFilesFromStorage = async (
 	options: StorageFileListOptions,
 ): Promise<StorageFileEntry[]> => {
-	const storagePrefix = buildStoragePath(options);
-	const storageBucket = getStorage().bucket();
-	const [files] = await storageBucket.getFiles({ prefix: storagePrefix });
+	const backend = getStorageBackend();
+	const objects = await backend.list(buildStoragePath(options));
 	const includedPath = options.pathIncludes;
-	const matchingFiles = includedPath
-		? files.filter((file) => file.name.includes(includedPath))
-		: files;
+	const matchingObjects = includedPath
+		? objects.filter((object) => object.name.includes(includedPath))
+		: objects;
 
 	return Promise.all(
-		matchingFiles.map(async (file) => {
+		matchingObjects.map(async (object) => {
 			const entry: StorageFileEntry = {
-				path: file.name,
-				updatedAt: file.metadata.updated || '',
+				path: object.name,
+				updatedAt: object.updated,
 			};
 
 			if (options.includeContents) {
-				const downloadedFile = await file.download();
-				entry.contents = decryptData(downloadedFile.toString());
+				entry.contents = decryptData((await backend.read(object.name)) ?? '');
 			}
 
 			return entry;
@@ -178,11 +182,5 @@ export const deleteFileFromStorage = async (options: StorageBaseType) => {
 		return;
 	}
 
-	const destinationPath = buildStoragePath(options, false);
-	const storageBucket = getStorage().bucket();
-
-	await storageBucket.deleteFiles({
-		prefix: destinationPath,
-		force: true,
-	});
+	await getStorageBackend().deletePrefix(buildStoragePath(options, false));
 };

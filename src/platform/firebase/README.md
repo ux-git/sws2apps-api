@@ -8,6 +8,12 @@ Authentication, document-store, and object-storage adapters expose
 application-neutral operations so Firebase SDK records do not leak into feature
 modules or bootstrap workflows.
 
+Object storage goes through a `StorageBackend` (`src/platform/storage`):
+`firebase-storage.ts` by default, or the filesystem backend when
+`STORAGE_BACKEND=filesystem` and `STORAGE_DIRECTORY` point at a local folder.
+The operations in `storage.ts` encrypt, decrypt and serialise writes per file the
+same way for both.
+
 The application imports `firebase-app.ts` once during startup. Local development
 uses Firebase emulator environment variables; production may provide a base64
 service-account document through `GOOGLE_CONFIG_BASE64`.

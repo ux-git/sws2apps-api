@@ -48,6 +48,11 @@ if (!['development', 'production', 'test'].includes(nodeEnv)) {
 	throw new Error('Environment variable NODE_ENV must be development, production, or test');
 }
 
+const storageBackend = readOptional('STORAGE_BACKEND') ?? 'firebase';
+if (!['firebase', 'filesystem'].includes(storageBackend)) {
+	throw new Error('Environment variable STORAGE_BACKEND must be firebase or filesystem');
+}
+
 const mailEnabled = readBoolean('MAIL_ENABLED');
 const encryptionKey = readOptional('SEC_ENCRYPT_KEY');
 
@@ -69,6 +74,9 @@ export const env = Object.freeze({
 	firebaseStorageSuffix: readOptional('FIREBASE_STORAGE_SUFFIX') ?? 'firebasestorage.app',
 	firebaseAuthEmulatorHost: readOptional('FIREBASE_AUTH_EMULATOR_HOST'),
 	googleConfigBase64: readOptional('GOOGLE_CONFIG_BASE64'),
+	storageBackend: storageBackend as 'firebase' | 'filesystem',
+	storageDirectory:
+		storageBackend === 'filesystem' ? readRequired('STORAGE_DIRECTORY') : readOptional('STORAGE_DIRECTORY'),
 	encryptionKey: encryptionKey ?? 'organized-local-development-only',
 	mailEnabled,
 	mailAddress: mailEnabled ? readRequired('MAIL_ADDRESS') : readOptional('MAIL_ADDRESS'),
