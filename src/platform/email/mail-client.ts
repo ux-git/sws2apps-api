@@ -19,7 +19,11 @@ const handlebarsOptions: NodemailerExpressHandlebarsOptions = {
 	viewPath: templatesPath,
 };
 
-const transportOptions = buildMailTransportOptions(env.mailAddress, env.mailPassword);
+const transportOptions = buildMailTransportOptions(env.mailAddress, env.mailPassword, {
+	host: env.mailSmtpHost,
+	port: env.mailSmtpPort,
+	secure: env.mailSmtpSecure,
+});
 
 const transporter = nodemailer.createTransport(transportOptions, {
 	from: sender,

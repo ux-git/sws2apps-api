@@ -50,12 +50,12 @@ const readOrigins = (name: string) => {
 		});
 };
 
-const readPort = () => {
-	const value = readOptional('PORT');
-	if (!value) return 8000;
+const readPort = (name = 'PORT', fallback = 8000) => {
+	const value = readOptional(name);
+	if (!value) return fallback;
 	const port = Number(value);
 	if (!Number.isInteger(port) || port < 1 || port > 65535) {
-		throw new Error('Environment variable PORT must be an integer between 1 and 65535');
+		throw new Error(`Environment variable ${name} must be an integer between 1 and 65535`);
 	}
 	return port;
 };
@@ -101,6 +101,9 @@ export const env = Object.freeze({
 	mailAddress: mailEnabled ? readRequired('MAIL_ADDRESS') : readOptional('MAIL_ADDRESS'),
 	mailSenderName: mailEnabled ? readRequired('MAIL_SENDER_NAME') : readOptional('MAIL_SENDER_NAME'),
 	mailPassword: mailEnabled ? readRequired('MAIL_PASSWORD') : readOptional('MAIL_PASSWORD'),
+	mailSmtpHost: readOptional('MAIL_SMTP_HOST'),
+	mailSmtpPort: readPort('MAIL_SMTP_PORT', 465),
+	mailSmtpSecure: readBoolean('MAIL_SMTP_SECURE', true),
 	logtailSourceToken: readOptional('LOGTAIL_SOURCE_TOKEN'),
 	logtailIngestingHost: readOptional('LOGTAIL_INGESTING_HOST') ?? 'in.logs.betterstack.com',
 	crowdinApiKey: readOptional('CROWDIN_API_KEY'),

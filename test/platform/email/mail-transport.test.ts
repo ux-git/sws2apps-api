@@ -19,4 +19,28 @@ describe('email transport security', () => {
 
 		assert.equal(options.tls?.rejectUnauthorized, undefined);
 	});
+
+	it('keeps Gmail when no SMTP host is configured', () => {
+		const options = buildMailTransportOptions('sender@example.com', 'secret', {
+			host: undefined,
+			port: 465,
+			secure: true,
+		});
+
+		assert.equal(options.service, 'gmail');
+	});
+
+	it('connects to a configured SMTP server and still requires TLS', () => {
+		const options = buildMailTransportOptions('sender@example.com', 'secret', {
+			host: 'smtp.example.com',
+			port: 587,
+			secure: false,
+		});
+
+		assert.equal(options.service, undefined);
+		assert.equal(options.host, 'smtp.example.com');
+		assert.equal(options.port, 587);
+		assert.equal(options.secure, false);
+		assert.equal(options.requireTLS, true);
+	});
 });
