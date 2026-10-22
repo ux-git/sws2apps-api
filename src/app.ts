@@ -10,7 +10,7 @@ import compression from 'compression';
 import i18next from 'i18next';
 import type { RequestHandler } from 'express';
 
-import { requireInternetConnection } from '#http/middleware/internet-connection.middleware.js';
+import { internetConnectionMiddleware } from '#http/middleware/internet-connection.middleware.js';
 import { trackRequestState } from '#http/middleware/request-state.middleware.js';
 import { logRequestCompletion } from '#http/middleware/request-logging.middleware.js';
 import { serverReadyChecker } from '#http/middleware/server-ready.middleware.js';
@@ -66,7 +66,7 @@ export const createApp = (middlewareOverrides: ApplicationMiddlewareOverrides = 
 		extended: true,
 	}));
 
-	app.use(middlewareOverrides.internetConnection ?? requireInternetConnection());
+	app.use(middlewareOverrides.internetConnection ?? internetConnectionMiddleware(env.internetCheckEnabled));
 	app.use(middlewareOverrides.requestState ?? trackRequestState());
 	app.use(middlewareOverrides.requestLogging ?? logRequestCompletion());
 	app.use(middlewareOverrides.serverReady ?? serverReadyChecker());

@@ -53,3 +53,10 @@ export const requireInternetConnection = (
 		}
 	};
 };
+
+// a server on a private network may have no public internet at all
+export const internetConnectionMiddleware = (enabled: boolean) => {
+	if (enabled) return requireInternetConnection();
+
+	return (_request: Request, _response: Response, next: NextFunction) => next();
+};

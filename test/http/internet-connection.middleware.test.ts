@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { createCachedInternetCheck } from '#http/middleware/internet-connection.middleware.js';
+import {
+	createCachedInternetCheck,
+	internetConnectionMiddleware,
+} from '#http/middleware/internet-connection.middleware.js';
 
 describe('cached internet connection checks', () => {
 	it('reuses a result until its cache expires', async () => {
@@ -56,5 +59,18 @@ describe('cached internet connection checks', () => {
 		assert.equal(await check(), false);
 		assert.equal(await check(), false);
 		assert.equal(checkCount, 1);
+	});
+});
+
+describe('internet connection requirement', () => {
+	it('passes every request through when the check is disabled', async () => {
+		const middleware = internetConnectionMiddleware(false);
+		let passed = false;
+
+		await middleware({} as never, {} as never, () => {
+			passed = true;
+		});
+
+		assert.equal(passed, true);
 	});
 });
