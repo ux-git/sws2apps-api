@@ -49,6 +49,30 @@ submissions and withdrawals are rejected.
 Clients send only their own pending entries, never the whole map, so a stale
 entry on one device cannot re-apply a setting.
 
+## App modules
+
+The app shows the setting as modules rather than categories. Each module can
+be turned off, and each module that owns data picks where it goes:
+
+| Method | Server | Between the congregation's devices |
+|---|---|---|
+| `server` | stores and serves it | through the server |
+| `local` | never | nearby (native shell: Bluetooth, NFC, local network) or by sealed file |
+| `device` | never | not at all |
+
+`app_modules` holds `{ enabled, sync, updatedAt }` per module and is accepted
+from admins only. The app derives the `local_only_categories` entries from it,
+so the server enforcement stays the same: `local` and `device` both keep the
+module's categories off the server. Modules: field service reports (secretary
+only to leave the server; publisher records follow it), reports to the branch
+office (S-1, S-10), meeting attendance.
+
+A sealed file (`OLS1:` + ciphertext under the congregation access code) carries
+a device's copy of the local categories to another device of the same
+congregation; records merge newest-field-wins, nothing is deleted. The native
+shell exchanges the same bundles over Bluetooth or the local network through
+`window.organizedLocalSync` and `window.OrganizedNearby`.
+
 ## Sync flow
 
 | Step | App (admin device) | API |
